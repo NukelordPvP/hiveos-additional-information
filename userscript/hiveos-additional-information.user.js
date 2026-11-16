@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         HiveOS PearlHash TH + TH/W + OC Lifetime Averages
 // @namespace    https://hiveos.farm/
-// @version      34.1
+// @version      34.0
 // @description  Persists current and previous OC settings for every GPU and detects changes after page refresh
 // @match        https://the.hiveos.farm/*
 // @match        https://*.hiveos.farm/*
@@ -11,11 +11,11 @@
 (function () {
     'use strict';
 
-    const CHECK_INTERVAL = 2000;
+    const CHECK_INTERVAL = 5000;
 
     // Versioned rig-specific storage prevents GPU 0 on one worker from
     // sharing history with GPU 0 on another worker. The HiveOS worker URL
-    // URL origin + pathname identifies the active rig. Query/hash
+    // origin + pathname identifies the active rig. Query/hash
     // fragments are intentionally excluded so refreshes and tabs
     // keep using the same saved history key.
     const OC_STORAGE_PREFIX =
@@ -103,6 +103,17 @@
     }
 
 
+    function getRigStoragePrefix() {
+        return (
+            OC_STORAGE_PREFIX +
+            encodeURIComponent(
+                getRigIdentifier()
+            ) +
+            '-gpu-'
+        );
+    }
+
+
     // ============================================================
     // GPU ROW DETECTION
     // ============================================================
@@ -160,18 +171,14 @@
     // ============================================================
     // NATIVE HIVEOS CELLS
     //
-    // IMPORTANT:
-    //
-    // These indexes must remain unchanged.
-    //
     // [2] = TH
     // [5] = Power
     // [6] = Core
     // [7] = MEM
     // [8] = PL
     //
-    // All custom columns are absolutely positioned so they do
-    // NOT change the native HiveOS child indexes.
+    // Custom columns are positioned absolutely so native
+    // HiveOS child indexes remain unchanged.
     // ============================================================
 
     function getHashrate(row) {
@@ -246,33 +253,11 @@
 
     // ============================================================
     // OC STORAGE
-    //
-    // Each GPU stores:
-    //
-    // Current OC:
-    //   core
-    //   memory
-    //   PL
-    //   startTime
-    //   sampleCount
-    //   sumHashrate
-    //   sumEfficiency
-    //
-    // Previous OC:
-    //   core
-    //   memory
-    //   PL
-    //   startTime
-    //   endTime
-    //   averageHashrate
-    //   averageEfficiency
     // ============================================================
 
     function getOcStorageKey(gpu) {
         return (
-            OC_STORAGE_PREFIX +
-            encodeURIComponent(getRigIdentifier()) +
-            '-gpu-' +
+            getRigStoragePrefix() +
             gpu
         );
     }
@@ -388,10 +373,8 @@
     // ============================================================
     // UPDATE OC
     //
-    // This is called BEFORE adding the current sample.
-    //
-    // Therefore, if the OC changes, the current sample belongs
-    // to the NEW OC run.
+    // Called whenever valid OC settings are available.
+    // Does not require hashrate or power to be loaded.
     // ============================================================
 
     function updateOcHistory(
@@ -400,6 +383,14 @@
         memory,
         pl
     ) {
+        if (
+            core === null ||
+            memory === null ||
+            pl === null
+        ) {
+            return loadOcHistory(gpu);
+        }
+
         const history =
         loadOcHistory(gpu);
 
@@ -457,25 +448,32 @@
 
         if (changed) {
 
-            // Always preserve the last observed settings, even if
-            // the OC changed before a mining sample was collected.
-            // This is what allows a refresh to detect and display
-            // the previous settings reliably.
+            // Save the completed OC as previous.
             history.previous = {
-                core: history.core,
-                memory: history.memory,
-                pl: history.pl,
-                startTime: history.startTime,
-                endTime: Date.now(),
+                core:
+                history.core,
 
-                // Averages are only available when samples exist.
-                averageHashrate: history.sampleCount > 0
-                    ? history.sumHashrate / history.sampleCount
-                    : null,
+                memory:
+                history.memory,
 
-                averageEfficiency: history.sampleCount > 0
-                    ? history.sumEfficiency / history.sampleCount
-                    : null
+                pl:
+                history.pl,
+
+                startTime:
+                history.startTime,
+
+                endTime:
+                Date.now(),
+
+ averageHashrate:
+ history.sampleCount > 0
+ ? history.sumHashrate / history.sampleCount
+ : null,
+
+ averageEfficiency:
+ history.sampleCount > 0
+ ? history.sumEfficiency / history.sampleCount
+ : null
             };
 
 
@@ -514,8 +512,6 @@
 
     // ============================================================
     // ADD CURRENT SAMPLE
-    //
-    // These values accumulate for the ENTIRE current OC lifetime.
     // ============================================================
 
     function addCurrentOcSample(
@@ -614,11 +610,6 @@
 
     // ============================================================
     // TH COLUMN
-    //
-    // avg cur: XX.XX TH
-    // prev avg: XX.XX TH
-    //
-    // avg cur follows the current OC timer.
     // ============================================================
 
     function updateHashrateColumn(
@@ -662,27 +653,23 @@
                 container.style.marginTop =
                 '2px';
 
-                container.style.pointerEvents =
-                'none';
+            container.style.pointerEvents =
+            'none';
 
-                container.style.position =
-                'relative';
+            container.style.position =
+            'relative';
 
-                container.style.zIndex =
-                '10';
+            container.style.zIndex =
+            '10';
 
-                cell.appendChild(
-                    container
-                );
+            cell.appendChild(
+                container
+            );
         }
 
 
         container.innerHTML = '';
 
-
-        // --------------------------------------------------------
-        // CURRENT OC AVERAGE TH
-        // --------------------------------------------------------
 
         if (
             currentOcAverage !== null
@@ -703,10 +690,6 @@
             );
         }
 
-
-        // --------------------------------------------------------
-        // PREVIOUS OC AVERAGE TH
-        // --------------------------------------------------------
 
         if (
             previousHashrate !== null
@@ -731,12 +714,6 @@
 
     // ============================================================
     // EFFICIENCY COLUMN
-    //
-    // This is a SEPARATE column.
-    //
-    // cur: X.XXX TH/W
-    // avg cur: X.XXX TH/W
-    // prev avg: X.XXX TH/W
     // ============================================================
 
     function getOrCreateEfficiencyColumn(
@@ -857,13 +834,8 @@
         );
 
 
-        column.innerHTML =
-        '';
+        column.innerHTML = '';
 
-
-        // --------------------------------------------------------
-        // CURRENT EFFICIENCY
-        // --------------------------------------------------------
 
         const current =
         document.createElement(
@@ -877,10 +849,6 @@
             current
         );
 
-
-        // --------------------------------------------------------
-        // CURRENT OC AVERAGE EFFICIENCY
-        // --------------------------------------------------------
 
         if (
             currentOcAverage !== null
@@ -896,15 +864,11 @@
             average.style.opacity =
             '0.8';
 
-        column.appendChild(
-            average
-        );
+            column.appendChild(
+                average
+            );
         }
 
-
-        // --------------------------------------------------------
-        // PREVIOUS OC AVERAGE EFFICIENCY
-        // --------------------------------------------------------
 
         if (
             previousEfficiency !== null
@@ -920,9 +884,9 @@
             previous.style.opacity =
             '0.8';
 
-        column.appendChild(
-            previous
-        );
+            column.appendChild(
+                previous
+            );
         }
     }
 
@@ -959,42 +923,42 @@
             column.style.top =
             '0px';
 
-        column.style.width =
-        '58px';
+            column.style.width =
+            '58px';
 
-        column.style.display =
-        'flex';
+            column.style.display =
+            'flex';
 
-        column.style.flexDirection =
-        'column';
+            column.style.flexDirection =
+            'column';
 
-        column.style.justifyContent =
-        'center';
+            column.style.justifyContent =
+            'center';
 
-        column.style.fontSize =
-        '10px';
+            column.style.fontSize =
+            '10px';
 
-        column.style.lineHeight =
-        '13px';
+            column.style.lineHeight =
+            '13px';
 
-        column.style.whiteSpace =
-        'nowrap';
+            column.style.whiteSpace =
+            'nowrap';
 
-        column.style.pointerEvents =
-        'none';
+            column.style.pointerEvents =
+            'none';
 
-        column.style.zIndex =
-        '30';
+            column.style.zIndex =
+            '30';
 
-        row.style.position =
-        'relative';
+            row.style.position =
+            'relative';
 
-        row.appendChild(
-            column
-        );
+            row.appendChild(
+                column
+            );
 
 
-        return column;
+            return column;
     }
 
 
@@ -1063,8 +1027,7 @@
         );
 
 
-        column.innerHTML =
-        '';
+        column.innerHTML = '';
 
 
         const elapsed =
@@ -1160,49 +1123,48 @@
             }
 
 
-            container.innerHTML =
-            '';
+            container.innerHTML = '';
 
 
-        // Current
-        if (
-            currentValue !== null &&
-            currentValue !== undefined
-        ) {
-            const current =
-            document.createElement(
-                'div'
-            );
+            // Current
+            if (
+                currentValue !== null &&
+                currentValue !== undefined
+            ) {
+                const current =
+                document.createElement(
+                    'div'
+                );
 
-            current.textContent =
-            `cur: ${currentValue}`;
+                current.textContent =
+                `cur: ${currentValue}`;
 
-            container.appendChild(
-                current
-            );
-        }
+                container.appendChild(
+                    current
+                );
+            }
 
 
-        // Previous
-        if (
-            previousValue !== null &&
-            previousValue !== undefined
-        ) {
-            const previous =
-            document.createElement(
-                'div'
-            );
+            // Previous
+            if (
+                previousValue !== null &&
+                previousValue !== undefined
+            ) {
+                const previous =
+                document.createElement(
+                    'div'
+                );
 
-            previous.textContent =
-            `prev: ${previousValue}`;
+                previous.textContent =
+                `prev: ${previousValue}`;
 
-            previous.style.opacity =
-            '0.65';
+                previous.style.opacity =
+                '0.65';
 
-            container.appendChild(
-                previous
-            );
-        }
+        container.appendChild(
+            previous
+        );
+            }
     }
 
 
@@ -1244,66 +1206,142 @@
 
 
     // ============================================================
-    // GPU SETTINGS STATE (shown beside GPU hardware information)
+    // GPU STATE COLUMN
+    //
+    // Added to the GPU hardware information area.
+    //
+    // MATCHING = current Core/MEM/PL equal saved previous Core/MEM/PL
+    // CHANGED  = one or more settings differ
+    // NO PREVIOUS = there is no saved previous OC yet
     // ============================================================
 
-    function updateGpuSettingsState(row, history, core, memory, pl) {
-        // The first native cell contains the GPU number and hardware
-        // description. Append the state badge there so it appears
-        // immediately after the GPU information without adding a
-        // new direct child to the GPU row (native indexes stay intact).
-        const infoCell = row.children[0];
-        if (!infoCell) return;
+    function getOrCreateGpuStateElement(
+        row
+    ) {
+        let state =
+        row.querySelector(
+            ':scope > .nuke-gpu-state'
+        );
 
-        let state = infoCell.querySelector(':scope > .nuke-gpu-settings-state');
-        if (!state) {
-            state = document.createElement('span');
-            state.className = 'nuke-gpu-settings-state';
-            state.style.display = 'inline-block';
-            state.style.marginLeft = '12px';
-            state.style.padding = '2px 7px';
-            state.style.borderRadius = '4px';
-            state.style.fontSize = '10px';
-            state.style.fontWeight = '600';
-            state.style.lineHeight = '14px';
-            state.style.whiteSpace = 'nowrap';
-            state.style.verticalAlign = 'middle';
-            state.style.pointerEvents = 'none';
-            infoCell.appendChild(state);
+        if (state) {
+            return state;
         }
 
-        const hasPrevious = !!(history && history.previous);
-        const matchesPrevious = hasPrevious &&
-            Number(core) === Number(history.previous.core) &&
-            Number(memory) === Number(history.previous.memory) &&
-            Number(pl) === Number(history.previous.pl);
 
-        if (!hasPrevious) {
-            state.textContent = 'NO PREVIOUS';
-            state.style.color = '#9ca3af';
-            state.style.background = 'rgba(156,163,175,0.14)';
-            state.title = 'No previous OC settings have been recorded yet';
-        } else if (matchesPrevious) {
-            state.textContent = 'MATCHING';
-            state.style.color = '#22c55e';
-            state.style.background = 'rgba(34,197,94,0.14)';
-            state.title = 'Current Core, MEM and PL match the saved previous settings';
+        state =
+        document.createElement(
+            'div'
+        );
+
+        state.className =
+        'nuke-gpu-state';
+
+            state.style.position =
+            'absolute';
+
+            state.style.right =
+            '12px';
+
+            state.style.top =
+            '50%';
+
+        state.style.transform =
+        'translateY(-50%)';
+
+            state.style.fontSize =
+            '10px';
+
+            state.style.fontWeight =
+            '700';
+
+        state.style.lineHeight =
+        '16px';
+
+        state.style.padding =
+        '2px 8px';
+
+        state.style.borderRadius =
+        '4px';
+
+        state.style.whiteSpace =
+        'nowrap';
+
+        state.style.pointerEvents =
+        'none';
+
+        state.style.zIndex =
+        '100';
+
+        row.style.position =
+        'relative';
+
+        row.appendChild(
+            state
+        );
+
+
+        return state;
+    }
+
+
+    function updateGpuState(
+        row,
+        history
+    ) {
+        const state =
+        getOrCreateGpuStateElement(
+            row
+        );
+
+
+        if (
+            !history ||
+            !history.previous
+        ) {
+            state.textContent =
+            'NO PREVIOUS';
+
+        state.style.color =
+        '#9ca3af';
+
+        state.style.background =
+        'rgba(156, 163, 175, 0.12)';
+
+        return;
+        }
+
+
+        const matchesPrevious =
+        history.core === history.previous.core &&
+        history.memory === history.previous.memory &&
+        history.pl === history.previous.pl;
+
+
+        if (matchesPrevious) {
+            state.textContent =
+            'MATCHING';
+
+        state.style.color =
+        '#22c55e';
+
+        state.style.background =
+        'rgba(34, 197, 94, 0.12)';
+
         } else {
-            state.textContent = 'CHANGED';
-            state.style.color = '#f59e0b';
-            state.style.background = 'rgba(245,158,11,0.14)';
-            state.title = 'At least one current OC setting differs from the saved previous settings';
+            state.textContent =
+            'CHANGED';
+
+        state.style.color =
+        '#f59e0b';
+
+        state.style.background =
+        'rgba(245, 158, 11, 0.12)';
         }
     }
 
 
     // ============================================================
     // GLOBAL REFRESH COUNTDOWN
-    //
-    // ONE timer for the whole table.
-    //
-    // It is positioned above the TH column.
-    // It is NOT part of each GPU row.
     // ============================================================
 
     function getOrCreateGlobalRefresh() {
@@ -1332,27 +1370,27 @@
             element.style.fontSize =
             '9px';
 
-            element.style.lineHeight =
-            '11px';
+        element.style.lineHeight =
+        '11px';
 
-            element.style.whiteSpace =
-            'nowrap';
+        element.style.whiteSpace =
+        'nowrap';
 
-            element.style.opacity =
-            '0.65';
+        element.style.opacity =
+        '0.65';
 
-            element.style.pointerEvents =
-            'none';
+        element.style.pointerEvents =
+        'none';
 
-            element.style.zIndex =
-            '999999';
+        element.style.zIndex =
+        '999999';
 
-            document.body.appendChild(
-                element
-            );
+        document.body.appendChild(
+            element
+        );
 
 
-            return element;
+        return element;
     }
 
 
@@ -1450,26 +1488,52 @@
             getPL(row);
 
 
-            // Detect and display OC state even while HiveOS is still
-            // loading hashrate/power after a page refresh.
-            if (
-                core === null ||
-                memory === null ||
-                pl === null
-            ) {
-                continue;
-            }
+            // ----------------------------------------------------
+            // UPDATE OC SETTINGS FIRST
+            //
+            // This is independent of hashrate and power.
+            // It allows changes to be detected after a page refresh
+            // even before mining statistics have loaded.
+            // ----------------------------------------------------
 
-            const ocHistory = updateOcHistory(gpu, core, memory, pl);
-            updateGpuSettingsState(row, ocHistory, core, memory, pl);
+            const ocHistory =
+            updateOcHistory(
+                gpu,
+                core,
+                memory,
+                pl
+            );
+
+
+            // ----------------------------------------------------
+            // UPDATE GPU STATE
+            // ----------------------------------------------------
+
+            updateGpuState(
+                row,
+                ocHistory
+            );
+
+
+            // ----------------------------------------------------
+            // REQUIRE VALID MINING DATA FOR TH/W STATISTICS
+            // ----------------------------------------------------
 
             if (
                 hashrate === null ||
                 power === null ||
                 power <= 0
             ) {
-                updateCurrentPreviousValues(row, ocHistory);
-                updateOcColumn(row, ocHistory);
+                updateOcColumn(
+                    row,
+                    ocHistory
+                );
+
+                updateCurrentPreviousValues(
+                    row,
+                    ocHistory
+                );
+
                 continue;
             }
 
@@ -1482,13 +1546,6 @@
             hashrate /
             power;
 
-
-            // ----------------------------------------------------
-            // UPDATE OC FIRST
-            //
-            // If OC changed, this creates the new OC run before
-            // this sample gets added.
-            // ----------------------------------------------------
 
             // ----------------------------------------------------
             // ADD CURRENT SAMPLE TO CURRENT OC
@@ -1564,12 +1621,18 @@
                 row,
                 updatedHistory
             );
+
+
+            // ----------------------------------------------------
+            // GPU STATE
+            // ----------------------------------------------------
+
+            updateGpuState(
+                row,
+                updatedHistory
+            );
         }
 
-
-        // --------------------------------------------------------
-        // GLOBAL REFRESH TIMER
-        // --------------------------------------------------------
 
         updateGlobalRefreshCountdown();
     }
@@ -1609,14 +1672,6 @@
                 continue;
             }
 
-            updateGpuSettingsState(
-                row,
-                history,
-                getCore(row),
-                getMemory(row),
-                getPL(row)
-            );
-
 
             // OC timer
             updateOcColumn(
@@ -1630,6 +1685,13 @@
                 row,
                 history
             );
+
+
+            // GPU state
+            updateGpuState(
+                row,
+                history
+            );
         }
 
 
@@ -1639,13 +1701,6 @@
 
     // ============================================================
     // INITIAL START
-    // ============================================================
-    //
-    // On every page load/refresh, scan the rendered GPU rows and
-    // compare their live Core/MEM/PL values against each GPU's
-    // saved current settings in localStorage. If any differ,
-    // the saved settings become "previous" and the live values
-    // become "current". Each rig has its own storage namespace.
     // ============================================================
 
     setTimeout(() => {

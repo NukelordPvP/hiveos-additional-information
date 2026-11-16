@@ -451,10 +451,17 @@ const CHECK_INTERVAL = 5000;
         });
 
         if (changedFields.length > 0) {
+            // Save only the fields that actually changed. Unchanged settings
+            // must not be presented as previous values merely because another
+            // OC field changed.
             history.previous = {
-                core: Number.isFinite(history.core) ? history.core : null,
-                memory: Number.isFinite(history.memory) ? history.memory : null,
-                pl: Number.isFinite(history.pl) ? history.pl : null,
+                core: changedFields.includes('core') && Number.isFinite(history.core)
+                    ? history.core : null,
+                memory: changedFields.includes('memory') && Number.isFinite(history.memory)
+                    ? history.memory : null,
+                pl: changedFields.includes('pl') && Number.isFinite(history.pl)
+                    ? history.pl : null,
+                changedFields: [...changedFields],
                 raw: history.raw || null,
                 startTime: history.startTime,
                 endTime: Date.now(),
@@ -1207,10 +1214,13 @@ const CHECK_INTERVAL = 5000;
             return;
         }
 
-        const previousMatchesLive =
-            history.core === history.previous.core &&
-            history.memory === history.previous.memory &&
-            history.pl === history.previous.pl;
+        const trackedPreviousFields = ['core', 'memory', 'pl'].filter(field =>
+            Number.isFinite(history.previous[field])
+        );
+        const previousMatchesLive = trackedPreviousFields.length > 0 &&
+            trackedPreviousFields.every(field =>
+                history[field] === history.previous[field]
+            );
 
         if (previousMatchesLive) {
             state.textContent = 'PREV: MATCHING';

@@ -348,10 +348,13 @@
             return;
         }
 
-        const previousMatchesLive =
-            history.core === history.previous.core &&
-            history.memory === history.previous.memory &&
-            history.pl === history.previous.pl;
+        const trackedPreviousFields = ['core', 'memory', 'pl'].filter(field =>
+            Number.isFinite(history.previous[field])
+        );
+        const previousMatchesLive = trackedPreviousFields.length > 0 &&
+            trackedPreviousFields.every(field =>
+                history[field] === history.previous[field]
+            );
 
         if (previousMatchesLive) {
             state.textContent = 'PREV: MATCHING';

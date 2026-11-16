@@ -1,6 +1,6 @@
 {
   "name": "hiveos-additional-information-userscript",
-  "version": "35.3.0",
+  "version": "35.3.1",
   "private": true,
   "type": "module",
   "scripts": {

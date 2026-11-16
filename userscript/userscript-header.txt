@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         HiveOS Additional Information
 // @namespace    https://hiveos.farm/
-// @version      35.1.0
+// @version      35.2.0
 // @description  GPU metrics, overclock history, timers and additional HiveOS interface information
 // @match        https://the.hiveos.farm/*
 // @match        https://*.hiveos.farm/*

@@ -254,26 +254,16 @@
             }
 
 
-            // Previous
-            if (
-                previousValue !== null &&
-                previousValue !== undefined
-            ) {
-                const previous =
-                document.createElement(
-                    'div'
-                );
-
-                previous.textContent =
-                `prev: ${previousValue}`;
-
-                previous.style.opacity =
-                '0.65';
-
-        container.appendChild(
-            previous
-        );
-            }
+            // Always show a distinct previous line. Never substitute current values.
+            const previous = document.createElement('div');
+            previous.textContent = `prev: ${
+                previousValue !== null && previousValue !== undefined
+                    ? previousValue
+                    : '—'
+            }`;
+            previous.style.opacity = '0.75';
+            previous.style.color = '#f59e0b';
+            container.appendChild(previous);
     }
 
 
@@ -365,64 +355,35 @@
     }
 
 
-    function updateGpuState(
-        row,
-        history
-    ) {
-        const state =
-        getOrCreateGpuStateElement(
-            row
-        );
+    function updateGpuState(row, history) {
+        const state = getOrCreateGpuStateElement(row);
+        if (!state) return;
 
-        if (!state) {
+        if (!history || !history.previous) {
+            state.textContent = 'PREV: NONE';
+            state.title = 'No previous OC configuration has been saved yet';
+            state.style.color = '#9ca3af';
+            state.style.background = 'rgba(156, 163, 175, 0.12)';
             return;
         }
 
-        if (
-            !history ||
-            !history.previous
-        ) {
-            state.textContent =
-            'NO PREVIOUS';
+        const previousMatchesLive =
+            history.core === history.previous.core &&
+            history.memory === history.previous.memory &&
+            history.pl === history.previous.pl;
 
-        state.style.color =
-        '#9ca3af';
-
-        state.style.background =
-        'rgba(156, 163, 175, 0.12)';
-
-        return;
-        }
-
-
-        const matchesPrevious =
-        history.core === history.previous.core &&
-        history.memory === history.previous.memory &&
-        history.pl === history.previous.pl;
-
-
-        if (matchesPrevious) {
-            state.textContent =
-            'MATCHING';
-
-        state.style.color =
-        '#22c55e';
-
-        state.style.background =
-        'rgba(34, 197, 94, 0.12)';
-
+        if (previousMatchesLive) {
+            state.textContent = 'PREV: MATCHING';
+            state.title = 'Live Core/MEM/PL settings match the saved previous OC';
+            state.style.color = '#22c55e';
+            state.style.background = 'rgba(34, 197, 94, 0.12)';
         } else {
-            state.textContent =
-            'CHANGED';
-
-        state.style.color =
-        '#f59e0b';
-
-        state.style.background =
-        'rgba(245, 158, 11, 0.12)';
+            state.textContent = 'PREV: DIFFERENT';
+            state.title = 'Saved previous OC differs from live/current Core/MEM/PL settings';
+            state.style.color = '#f59e0b';
+            state.style.background = 'rgba(245, 158, 11, 0.12)';
         }
     }
-
 
     // ============================================================
     // GLOBAL REFRESH COUNTDOWN

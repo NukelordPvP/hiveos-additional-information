@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         HiveOS Additional Information
 // @namespace    https://hiveos.farm/
-// @version      35.0.0
+// @version      35.1.0
 // @description  GPU metrics, overclock history, timers and additional HiveOS interface information
 // @match        https://the.hiveos.farm/*
 // @match        https://*.hiveos.farm/*
@@ -1660,18 +1660,29 @@ const CHECK_INTERVAL = 5000;
             }
 
 
-            const history =
-            loadOcHistory(gpu);
+            // Poll LIVE HiveOS OC values every timer tick. A page refresh is
+            // not required when Core, MEM or PL changes. updateOcHistory()
+            // archives the old current settings as previous when a difference
+            // is detected, then starts a new current OC period.
+            const liveOc = getLiveOcSettings(row);
+            const { core, memory, pl } = liveOc;
 
-
-            if (
-                history.core === null ||
-                history.memory === null ||
-                history.pl === null
-            ) {
+            if (core === null || memory === null || pl === null) {
+                console.warn('[HiveOS Additional Information] OC polling could not read all live fields', {
+                    gpu,
+                    core: liveOc.raw.core,
+                    memory: liveOc.raw.memory,
+                    pl: liveOc.raw.pl
+                });
                 continue;
             }
 
+            const history = updateOcHistory(gpu, core, memory, pl);
+
+            // Update the displayed current/previous values and badge as soon
+            // as the changed settings are detected, independent of mining data.
+            updateCurrentPreviousValues(row, history);
+            updateGpuState(row, history);
 
             // OC timer
             updateOcColumn(

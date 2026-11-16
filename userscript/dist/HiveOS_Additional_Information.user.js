@@ -360,7 +360,10 @@ const CHECK_INTERVAL = 5000;
 
  previous:
  data.previous ||
- null
+ null,
+
+ raw:
+ data.raw || null
             };
 
         } catch (error) {
@@ -404,7 +407,8 @@ const CHECK_INTERVAL = 5000;
         gpu,
         core,
         memory,
-        pl
+        pl,
+        raw = null
     ) {
         if (
             core === null ||
@@ -438,6 +442,8 @@ const CHECK_INTERVAL = 5000;
             history.pl =
             pl;
 
+            history.raw = raw;
+
             history.startTime =
             Date.now();
 
@@ -463,11 +469,26 @@ const CHECK_INTERVAL = 5000;
         // CHECK FOR OC CHANGE
         // --------------------------------------------------------
 
+        // Compare both parsed values and the native cell text. HiveOS can
+        // change the selected OC text while retaining the same first numeric
+        // token (for example, power-limit cells containing several values).
+        const rawChanged = Boolean(
+            raw && history.raw &&
+            (raw.core !== history.raw.core ||
+             raw.memory !== history.raw.memory ||
+             raw.pl !== history.raw.pl)
+        );
+
         const changed =
         history.core !== core ||
         history.memory !== memory ||
-        history.pl !== pl;
+        history.pl !== pl ||
+        rawChanged;
 
+
+        if (!history.raw && raw) {
+            history.raw = raw;
+        }
 
         if (changed) {
 
@@ -481,6 +502,9 @@ const CHECK_INTERVAL = 5000;
 
                 pl:
                 history.pl,
+
+                raw:
+                history.raw || null,
 
                 startTime:
                 history.startTime,
@@ -509,6 +533,8 @@ const CHECK_INTERVAL = 5000;
 
             history.pl =
             pl;
+
+            history.raw = raw;
 
             history.startTime =
             Date.now();
@@ -1432,7 +1458,8 @@ const CHECK_INTERVAL = 5000;
                 gpu,
                 core,
                 memory,
-                pl
+                pl,
+                liveOc.raw
             );
 
             if (core === null || memory === null || pl === null) {
@@ -1617,7 +1644,7 @@ const CHECK_INTERVAL = 5000;
                 continue;
             }
 
-            const history = updateOcHistory(gpu, core, memory, pl);
+            const history = updateOcHistory(gpu, core, memory, pl, liveOc.raw);
 
             // Update the displayed current/previous values and badge as soon
             // as the changed settings are detected, independent of mining data.

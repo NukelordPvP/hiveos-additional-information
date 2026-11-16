@@ -86,7 +86,10 @@
 
  previous:
  data.previous ||
- null
+ null,
+
+ raw:
+ data.raw || null
             };
 
         } catch (error) {
@@ -130,7 +133,8 @@
         gpu,
         core,
         memory,
-        pl
+        pl,
+        raw = null
     ) {
         if (
             core === null ||
@@ -164,6 +168,8 @@
             history.pl =
             pl;
 
+            history.raw = raw;
+
             history.startTime =
             Date.now();
 
@@ -189,11 +195,26 @@
         // CHECK FOR OC CHANGE
         // --------------------------------------------------------
 
+        // Compare both parsed values and the native cell text. HiveOS can
+        // change the selected OC text while retaining the same first numeric
+        // token (for example, power-limit cells containing several values).
+        const rawChanged = Boolean(
+            raw && history.raw &&
+            (raw.core !== history.raw.core ||
+             raw.memory !== history.raw.memory ||
+             raw.pl !== history.raw.pl)
+        );
+
         const changed =
         history.core !== core ||
         history.memory !== memory ||
-        history.pl !== pl;
+        history.pl !== pl ||
+        rawChanged;
 
+
+        if (!history.raw && raw) {
+            history.raw = raw;
+        }
 
         if (changed) {
 
@@ -207,6 +228,9 @@
 
                 pl:
                 history.pl,
+
+                raw:
+                history.raw || null,
 
                 startTime:
                 history.startTime,
@@ -235,6 +259,8 @@
 
             history.pl =
             pl;
+
+            history.raw = raw;
 
             history.startTime =
             Date.now();

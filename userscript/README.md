@@ -38,3 +38,8 @@ The internal localStorage key prefix is intentionally retained from the previous
 ## Current scope
 
 This is the modularized baseline of the existing HiveOS enhancement script. The project structure makes future additions independent of any particular miner or workload. Features such as more resilient DOM observation and isolated module error handling can be added in later changes.
+
+
+## OC change detection
+
+OC settings are polled every second and sampled on the existing five-second scan. Change detection compares both parsed Core/MEM/PL numbers and the native HiveOS cell text, so changes to a selected value are still detected when a cell contains multiple numeric tokens. The old numeric settings are saved as `previous` before the new settings become current.

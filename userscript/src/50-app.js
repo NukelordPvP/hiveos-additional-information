@@ -43,7 +43,8 @@
                 gpu,
                 core,
                 memory,
-                pl
+                pl,
+                liveOc.raw
             );
 
             if (core === null || memory === null || pl === null) {
@@ -228,7 +229,7 @@
                 continue;
             }
 
-            const history = updateOcHistory(gpu, core, memory, pl);
+            const history = updateOcHistory(gpu, core, memory, pl, liveOc.raw);
 
             // Update the displayed current/previous values and badge as soon
             // as the changed settings are detected, independent of mining data.

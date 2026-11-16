@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         HiveOS Additional Information
 // @namespace    https://hiveos.farm/
-// @version      35.5.0
+// @version      35.6.0
 // @description  GPU metrics, overclock history, timers and additional HiveOS interface information
 // @match        https://the.hiveos.farm/*
 // @match        https://*.hiveos.farm/*
@@ -459,6 +459,9 @@ const CHECK_INTERVAL = 5000;
                 raw: history.raw || null,
                 startTime: history.startTime,
                 endTime: Date.now(),
+                // How long the outgoing OC configuration was active before
+                // this change was detected.
+                durationSeconds: Math.max(0, Math.floor((Date.now() - history.startTime) / 1000)),
                 averageHashrate: history.sampleCount > 0
                     ? history.sumHashrate / history.sampleCount : null,
                 averageEfficiency: history.sampleCount > 0
@@ -1014,12 +1017,31 @@ const CHECK_INTERVAL = 5000;
         );
 
         timer.textContent =
-        `OC: ${formatDuration(elapsed)}`;
+        `Cur: ${formatDuration(elapsed)}`;
+        timer.title = 'Time the current OC settings have been active';
 
+        column.appendChild(timer);
 
-        column.appendChild(
-            timer
-        );
+        if (history.previous) {
+            const previousDuration =
+                Number.isFinite(history.previous.durationSeconds)
+                    ? history.previous.durationSeconds
+                    : Number.isFinite(history.previous.startTime) &&
+                      Number.isFinite(history.previous.endTime)
+                        ? Math.max(0, (history.previous.endTime - history.previous.startTime) / 1000)
+                        : null;
+
+            const previousTimer = document.createElement('div');
+            previousTimer.textContent = `Prev: ${
+                previousDuration !== null
+                    ? formatDuration(previousDuration)
+                    : '—'
+            }`;
+            previousTimer.style.color = '#f59e0b';
+            previousTimer.style.opacity = '0.85';
+            previousTimer.title = 'How long the previous OC settings were active';
+            column.appendChild(previousTimer);
+        }
     }
 
 

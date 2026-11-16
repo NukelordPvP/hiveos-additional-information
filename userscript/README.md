@@ -43,3 +43,12 @@ This is the modularized baseline of the existing HiveOS enhancement script. The 
 ## OC change detection
 
 OC settings are polled every second and sampled on the existing five-second scan. Core, MEM, and PL are handled independently: a temporarily blank/unavailable field no longer blocks detection of changes in the other fields. The last known value is retained for unavailable fields. Parsed values are compared, with native cell text used as a secondary signal for cells such as PL where the selected text can change while the first numeric token stays the same. When a change is detected, the prior known settings are saved as `previous` before valid new values become current.
+
+
+## Current and previous setting timers
+
+The GPU row timer column shows two independent durations:
+- `Cur` — how long the current Core/MEM/PL configuration has been active.
+- `Prev` — how long the previous configuration was active before the most recent detected OC change.
+
+The previous duration is captured at the moment the OC change is detected and is stored with the previous OC snapshot.

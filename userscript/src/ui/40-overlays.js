@@ -154,12 +154,31 @@
         );
 
         timer.textContent =
-        `OC: ${formatDuration(elapsed)}`;
+        `Cur: ${formatDuration(elapsed)}`;
+        timer.title = 'Time the current OC settings have been active';
 
+        column.appendChild(timer);
 
-        column.appendChild(
-            timer
-        );
+        if (history.previous) {
+            const previousDuration =
+                Number.isFinite(history.previous.durationSeconds)
+                    ? history.previous.durationSeconds
+                    : Number.isFinite(history.previous.startTime) &&
+                      Number.isFinite(history.previous.endTime)
+                        ? Math.max(0, (history.previous.endTime - history.previous.startTime) / 1000)
+                        : null;
+
+            const previousTimer = document.createElement('div');
+            previousTimer.textContent = `Prev: ${
+                previousDuration !== null
+                    ? formatDuration(previousDuration)
+                    : '—'
+            }`;
+            previousTimer.style.color = '#f59e0b';
+            previousTimer.style.opacity = '0.85';
+            previousTimer.title = 'How long the previous OC settings were active';
+            column.appendChild(previousTimer);
+        }
     }
 
 

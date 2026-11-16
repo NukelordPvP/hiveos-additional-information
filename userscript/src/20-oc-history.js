@@ -185,6 +185,9 @@
                 raw: history.raw || null,
                 startTime: history.startTime,
                 endTime: Date.now(),
+                // How long the outgoing OC configuration was active before
+                // this change was detected.
+                durationSeconds: Math.max(0, Math.floor((Date.now() - history.startTime) / 1000)),
                 averageHashrate: history.sampleCount > 0
                     ? history.sumHashrate / history.sampleCount : null,
                 averageEfficiency: history.sampleCount > 0

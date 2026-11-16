@@ -225,19 +225,6 @@
         column.innerHTML = '';
 
 
-        const current =
-        document.createElement(
-            'div'
-        );
-
-        current.textContent =
-        `cur: ${currentEfficiency.toFixed(3)} TH/W`;
-
-        column.appendChild(
-            current
-        );
-
-
         if (
             currentOcAverage !== null
         ) {

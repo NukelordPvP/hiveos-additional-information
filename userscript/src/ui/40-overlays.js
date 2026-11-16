@@ -235,25 +235,6 @@
             container.innerHTML = '';
 
 
-            // Current
-            if (
-                currentValue !== null &&
-                currentValue !== undefined
-            ) {
-                const current =
-                document.createElement(
-                    'div'
-                );
-
-                current.textContent =
-                `cur: ${currentValue}`;
-
-                container.appendChild(
-                    current
-                );
-            }
-
-
             // Always show a distinct previous line. Never substitute current values.
             const previous = document.createElement('div');
             previous.textContent = `prev: ${

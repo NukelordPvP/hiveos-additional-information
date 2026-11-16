@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         HiveOS Additional Information
 // @namespace    https://hiveos.farm/
-// @version      35.3.1
+// @version      35.4.0
 // @description  GPU metrics, overclock history, timers and additional HiveOS interface information
 // @match        https://the.hiveos.farm/*
 // @match        https://*.hiveos.farm/*
@@ -134,34 +134,53 @@ const CHECK_INTERVAL = 5000;
     // ============================================================
 
     function getGpuRows() {
-        const rows = [];
+        const candidates = [];
 
-        document
-        .querySelectorAll('div')
-        .forEach(el => {
-            const text =
-            el.innerText || '';
+        document.querySelectorAll('div').forEach(el => {
+            const text = el.innerText || '';
 
             if (
                 /^GPU \d+\s+/i.test(text) &&
                 text.includes('GeForce') &&
                 el.children.length >= 9
             ) {
-                const gpu =
-                getGpuNumber(el);
-
-                if (
-                    gpu !== null &&
-                    !rows.includes(el)
-                ) {
-                    rows.push(el);
-                }
+                const gpu = getGpuNumber(el);
+                if (gpu !== null) candidates.push({ row: el, gpu });
             }
         });
 
-        return rows;
-    }
+        // Nested HiveOS wrappers can also match the text test above.
+        // Process exactly one actual row per GPU: prefer the candidate
+        // whose native HiveOS cells parse correctly, then the smallest
+        // direct-child count to avoid outer wrappers.
+        const selected = new Map();
 
+        for (const candidate of candidates) {
+            const { row, gpu } = candidate;
+            const values = [
+                getNativeCellNumber(row, 2), // hashrate
+                getNativeCellNumber(row, 5), // power
+                getNativeCellNumber(row, 6), // core
+                getNativeCellNumber(row, 7), // memory
+                getNativeCellNumber(row, 8)  // PL
+            ];
+            const score = values.filter(value => value !== null).length;
+            const previous = selected.get(gpu);
+
+            if (
+                !previous ||
+                score > previous.score ||
+                (score === previous.score &&
+                    row.children.length < previous.row.children.length)
+            ) {
+                selected.set(gpu, { row, score });
+            }
+        }
+
+        return Array.from(selected.entries())
+            .sort((a, b) => a[0] - b[0])
+            .map(([, item]) => item.row);
+    }
 
     function getGpuNumber(row) {
         const text =
@@ -843,19 +862,6 @@ const CHECK_INTERVAL = 5000;
         column.innerHTML = '';
 
 
-        const current =
-        document.createElement(
-            'div'
-        );
-
-        current.textContent =
-        `cur: ${currentEfficiency.toFixed(3)} TH/W`;
-
-        column.appendChild(
-            current
-        );
-
-
         if (
             currentOcAverage !== null
         ) {
@@ -1132,25 +1138,6 @@ const CHECK_INTERVAL = 5000;
 
 
             container.innerHTML = '';
-
-
-            // Current
-            if (
-                currentValue !== null &&
-                currentValue !== undefined
-            ) {
-                const current =
-                document.createElement(
-                    'div'
-                );
-
-                current.textContent =
-                `cur: ${currentValue}`;
-
-                container.appendChild(
-                    current
-                );
-            }
 
 
             // Always show a distinct previous line. Never substitute current values.

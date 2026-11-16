@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         HiveOS Additional Information
 // @namespace    https://hiveos.farm/
-// @version      35.2.0
+// @version      35.3.0
 // @description  GPU metrics, overclock history, timers and additional HiveOS interface information
 // @match        https://the.hiveos.farm/*
 // @match        https://*.hiveos.farm/*
@@ -134,34 +134,33 @@ const CHECK_INTERVAL = 5000;
     // ============================================================
 
     function getGpuRows() {
-        const rows = [];
+        // HiveOS can contain nested wrappers whose innerText begins with
+        // "GPU N". Select the actual GPU hardware row and keep one row per GPU.
+        const candidates = Array.from(document.querySelectorAll('div'))
+            .filter(el => {
+                if (el.children.length < 9) return false;
+                const firstCellText =
+                    el.children[0]?.innerText ||
+                    el.children[0]?.textContent ||
+                    '';
+                return /^GPU\s+\d+/i.test(firstCellText.trim()) &&
+                    firstCellText.includes('GeForce');
+            });
 
-        document
-        .querySelectorAll('div')
-        .forEach(el => {
-            const text =
-            el.innerText || '';
-
-            if (
-                /^GPU \d+\s+/i.test(text) &&
-                text.includes('GeForce') &&
-                el.children.length >= 9
-            ) {
-                const gpu =
-                getGpuNumber(el);
-
-                if (
-                    gpu !== null &&
-                    !rows.includes(el)
-                ) {
-                    rows.push(el);
-                }
+        const byGpu = new Map();
+        for (const row of candidates) {
+            const gpu = getGpuNumber(row);
+            if (gpu === null) continue;
+            const existing = byGpu.get(gpu);
+            if (!existing || row.children.length < existing.children.length) {
+                byGpu.set(gpu, row);
             }
-        });
+        }
 
-        return rows;
+        return Array.from(byGpu.entries())
+            .sort((a, b) => a[0] - b[0])
+            .map(([, row]) => row);
     }
-
 
     function getGpuNumber(row) {
         const text =
@@ -206,7 +205,7 @@ const CHECK_INTERVAL = 5000;
 
         const clone = cell.cloneNode(true);
         clone.querySelectorAll(
-            '.nuke-oc-values, .nuke-th-container, .nuke-efficiency-column, .nuke-oc-column, .nuke-gpu-state, #nuke-global-refresh-countdown'
+            '[class*="nuke-"], #nuke-global-refresh-countdown'
         ).forEach(node => node.remove());
 
         return (clone.innerText || clone.textContent || '').trim();
@@ -701,24 +700,20 @@ const CHECK_INTERVAL = 5000;
         }
 
 
-        if (
-            previousHashrate !== null
-        ) {
-            const previous =
-            document.createElement(
-                'div'
-            );
+        const previous =
+        document.createElement('div');
 
-            previous.textContent =
-            `prev avg: ${previousHashrate.toFixed(2)} TH`;
+        previous.textContent =
+        `prev avg: ${
+            previousHashrate !== null &&
+            previousHashrate !== undefined
+                ? `${previousHashrate.toFixed(2)} TH`
+                : '—'
+        }`;
 
-            previous.style.opacity =
-            '0.8';
-
-            container.appendChild(
-                previous
-            );
-        }
+        previous.style.opacity = '0.8';
+        previous.style.color = '#f59e0b';
+        container.appendChild(previous);
     }
 
 
@@ -880,24 +875,20 @@ const CHECK_INTERVAL = 5000;
         }
 
 
-        if (
-            previousEfficiency !== null
-        ) {
-            const previous =
-            document.createElement(
-                'div'
-            );
+        const previous =
+        document.createElement('div');
 
-            previous.textContent =
-            `prev avg: ${previousEfficiency.toFixed(3)} TH/W`;
+        previous.textContent =
+        `prev avg: ${
+            previousEfficiency !== null &&
+            previousEfficiency !== undefined
+                ? `${previousEfficiency.toFixed(3)} TH/W`
+                : '—'
+        }`;
 
-            previous.style.opacity =
-            '0.8';
-
-            column.appendChild(
-                previous
-            );
-        }
+        previous.style.opacity = '0.8';
+        previous.style.color = '#f59e0b';
+        column.appendChild(previous);
     }
 
 

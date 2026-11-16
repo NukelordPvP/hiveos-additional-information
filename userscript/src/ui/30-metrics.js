@@ -83,24 +83,20 @@
         }
 
 
-        if (
-            previousHashrate !== null
-        ) {
-            const previous =
-            document.createElement(
-                'div'
-            );
+        const previous =
+        document.createElement('div');
 
-            previous.textContent =
-            `prev avg: ${previousHashrate.toFixed(2)} TH`;
+        previous.textContent =
+        `prev avg: ${
+            previousHashrate !== null &&
+            previousHashrate !== undefined
+                ? `${previousHashrate.toFixed(2)} TH`
+                : '—'
+        }`;
 
-            previous.style.opacity =
-            '0.8';
-
-            container.appendChild(
-                previous
-            );
-        }
+        previous.style.opacity = '0.8';
+        previous.style.color = '#f59e0b';
+        container.appendChild(previous);
     }
 
 
@@ -262,24 +258,20 @@
         }
 
 
-        if (
-            previousEfficiency !== null
-        ) {
-            const previous =
-            document.createElement(
-                'div'
-            );
+        const previous =
+        document.createElement('div');
 
-            previous.textContent =
-            `prev avg: ${previousEfficiency.toFixed(3)} TH/W`;
+        previous.textContent =
+        `prev avg: ${
+            previousEfficiency !== null &&
+            previousEfficiency !== undefined
+                ? `${previousEfficiency.toFixed(3)} TH/W`
+                : '—'
+        }`;
 
-            previous.style.opacity =
-            '0.8';
-
-            column.appendChild(
-                previous
-            );
-        }
+        previous.style.opacity = '0.8';
+        previous.style.color = '#f59e0b';
+        column.appendChild(previous);
     }
 
 

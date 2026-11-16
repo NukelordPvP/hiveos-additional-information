@@ -42,4 +42,4 @@ This is the modularized baseline of the existing HiveOS enhancement script. The 
 
 ## OC change detection
 
-OC settings are polled every second and sampled on the existing five-second scan. Change detection compares both parsed Core/MEM/PL numbers and the native HiveOS cell text, so changes to a selected value are still detected when a cell contains multiple numeric tokens. The old numeric settings are saved as `previous` before the new settings become current.
+OC settings are polled every second and sampled on the existing five-second scan. Core, MEM, and PL are handled independently: a temporarily blank/unavailable field no longer blocks detection of changes in the other fields. The last known value is retained for unavailable fields. Parsed values are compared, with native cell text used as a secondary signal for cells such as PL where the selected text can change while the first numeric token stays the same. When a change is detected, the prior known settings are saved as `previous` before valid new values become current.

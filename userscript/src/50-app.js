@@ -219,16 +219,12 @@
             const liveOc = getLiveOcSettings(row);
             const { core, memory, pl } = liveOc;
 
-            if (core === null || memory === null || pl === null) {
-                console.warn('[HiveOS Additional Information] OC polling could not read all live fields', {
-                    gpu,
-                    core: liveOc.raw.core,
-                    memory: liveOc.raw.memory,
-                    pl: liveOc.raw.pl
-                });
+            if (core === null && memory === null && pl === null) {
                 continue;
             }
 
+            // updateOcHistory handles each valid field independently; a blank
+            // MEM/Core/PL cell must not suppress changes detected elsewhere.
             const history = updateOcHistory(gpu, core, memory, pl, liveOc.raw);
 
             // Update the displayed current/previous values and badge as soon

@@ -136,154 +136,82 @@
         pl,
         raw = null
     ) {
-        if (
-            core === null ||
-            memory === null ||
-            pl === null
-        ) {
-            return loadOcHistory(gpu);
-        }
+        const history = loadOcHistory(gpu);
+        const incoming = { core, memory, pl };
+        const fields = ['core', 'memory', 'pl'];
+        const validFields = fields.filter(field =>
+            Number.isFinite(incoming[field])
+        );
 
-        const history =
-        loadOcHistory(gpu);
+        // HiveOS sometimes renders an unavailable field as "-". Do not let
+        // one missing field block detection of changes to the other fields.
+        if (validFields.length === 0) return history;
 
+        const hasBaseline = fields.some(field =>
+            Number.isFinite(history[field])
+        );
 
-        const initialized =
-        history.core !== null &&
-        history.memory !== null &&
-        history.pl !== null;
-
-
-        // --------------------------------------------------------
-        // FIRST OBSERVATION
-        // --------------------------------------------------------
-
-        if (!initialized) {
-            history.core =
-            core;
-
-            history.memory =
-            memory;
-
-            history.pl =
-            pl;
-
-            history.raw = raw;
-
-            history.startTime =
-            Date.now();
-
-            history.sampleCount =
-            0;
-
-            history.sumHashrate =
-            0;
-
-            history.sumEfficiency =
-            0;
-
-            saveOcHistory(
-                gpu,
-                history
-            );
-
+        if (!hasBaseline) {
+            for (const field of validFields) {
+                history[field] = incoming[field];
+            }
+            history.raw = { ...(history.raw || {}), ...(raw || {}) };
+            history.startTime = Date.now();
+            saveOcHistory(gpu, history);
             return history;
         }
 
+        const changedFields = validFields.filter(field => {
+            const oldValue = history[field];
+            if (!Number.isFinite(oldValue)) return false;
+            if (oldValue !== incoming[field]) return true;
 
-        // --------------------------------------------------------
-        // CHECK FOR OC CHANGE
-        // --------------------------------------------------------
+            // For cells such as PL, HiveOS can change the selected text while
+            // the first numeric token remains the same. Use raw text as a
+            // secondary signal only when both versions are available.
+            const oldRaw = history.raw?.[field];
+            const newRaw = raw?.[field];
+            return typeof oldRaw === 'string' && oldRaw.trim() !== '' &&
+                typeof newRaw === 'string' && newRaw.trim() !== '' &&
+                oldRaw.trim() !== newRaw.trim();
+        });
 
-        // Compare both parsed values and the native cell text. HiveOS can
-        // change the selected OC text while retaining the same first numeric
-        // token (for example, power-limit cells containing several values).
-        const rawChanged = Boolean(
-            raw && history.raw &&
-            (raw.core !== history.raw.core ||
-             raw.memory !== history.raw.memory ||
-             raw.pl !== history.raw.pl)
-        );
-
-        const changed =
-        history.core !== core ||
-        history.memory !== memory ||
-        history.pl !== pl ||
-        rawChanged;
-
-
-        if (!history.raw && raw) {
-            history.raw = raw;
-        }
-
-        if (changed) {
-
-            // Save the completed OC as previous.
+        if (changedFields.length > 0) {
             history.previous = {
-                core:
-                history.core,
-
-                memory:
-                history.memory,
-
-                pl:
-                history.pl,
-
-                raw:
-                history.raw || null,
-
-                startTime:
-                history.startTime,
-
-                endTime:
-                Date.now(),
-
- averageHashrate:
- history.sampleCount > 0
- ? history.sumHashrate / history.sampleCount
- : null,
-
- averageEfficiency:
- history.sampleCount > 0
- ? history.sumEfficiency / history.sampleCount
- : null
+                core: Number.isFinite(history.core) ? history.core : null,
+                memory: Number.isFinite(history.memory) ? history.memory : null,
+                pl: Number.isFinite(history.pl) ? history.pl : null,
+                raw: history.raw || null,
+                startTime: history.startTime,
+                endTime: Date.now(),
+                averageHashrate: history.sampleCount > 0
+                    ? history.sumHashrate / history.sampleCount : null,
+                averageEfficiency: history.sampleCount > 0
+                    ? history.sumEfficiency / history.sampleCount : null
             };
 
-
-            // Start new OC.
-            history.core =
-            core;
-
-            history.memory =
-            memory;
-
-            history.pl =
-            pl;
-
-            history.raw = raw;
-
-            history.startTime =
-            Date.now();
-
-            history.sampleCount =
-            0;
-
-            history.sumHashrate =
-            0;
-
-            history.sumEfficiency =
-            0;
+            history.startTime = Date.now();
+            history.sampleCount = 0;
+            history.sumHashrate = 0;
+            history.sumEfficiency = 0;
         }
 
+        // Update only values that HiveOS actually supplied. Keep the last
+        // known value for a field that is temporarily blank/unavailable.
+        for (const field of validFields) {
+            history[field] = incoming[field];
+        }
+        if (raw) {
+            history.raw = { ...(history.raw || {}), ...Object.fromEntries(
+                fields.filter(field => validFields.includes(field) &&
+                    typeof raw[field] === 'string' && raw[field].trim() !== '')
+                    .map(field => [field, raw[field]])
+            ) };
+        }
 
-        saveOcHistory(
-            gpu,
-            history
-        );
-
+        saveOcHistory(gpu, history);
         return history;
     }
-
 
     // ============================================================
     // ADD CURRENT SAMPLE

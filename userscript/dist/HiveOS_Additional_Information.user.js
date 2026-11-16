@@ -196,75 +196,58 @@ const CHECK_INTERVAL = 5000;
     // HiveOS child indexes remain unchanged.
     // ============================================================
 
-    function getHashrate(row) {
-        const cell =
-        row.children[2];
+    // Read the original HiveOS cell contents only. Our own UI overlays are
+    // injected into Core/MEM/PL cells; reading cell.innerText directly can
+    // accidentally read our own saved "cur:" value and feed it back as if it
+    // were the live GPU setting. Clone the cell and remove all owned overlays.
+    function getNativeCellText(row, index) {
+        const cell = row?.children?.[index];
+        if (!cell) return '';
 
-        if (!cell) {
-            return null;
-        }
+        const clone = cell.cloneNode(true);
+        clone.querySelectorAll(
+            '.nuke-oc-values, .nuke-th-container, .nuke-efficiency-column, .nuke-oc-column, .nuke-gpu-state, #nuke-global-refresh-countdown'
+        ).forEach(node => node.remove());
 
-        return parseNumber(
-            cell.innerText
-        );
+        return (clone.innerText || clone.textContent || '').trim();
     }
 
+    function getNativeCellNumber(row, index) {
+        return parseNumber(getNativeCellText(row, index));
+    }
+
+    function getHashrate(row) {
+        return getNativeCellNumber(row, 2);
+    }
 
     function getPower(row) {
-        const cell =
-        row.children[5];
-
-        if (!cell) {
-            return null;
-        }
-
-        return parseNumber(
-            cell.innerText
-        );
+        return getNativeCellNumber(row, 5);
     }
-
 
     function getCore(row) {
-        const cell =
-        row.children[6];
-
-        if (!cell) {
-            return null;
-        }
-
-        return parseNumber(
-            cell.innerText
-        );
+        return getNativeCellNumber(row, 6);
     }
-
 
     function getMemory(row) {
-        const cell =
-        row.children[7];
-
-        if (!cell) {
-            return null;
-        }
-
-        return parseNumber(
-            cell.innerText
-        );
+        return getNativeCellNumber(row, 7);
     }
-
 
     function getPL(row) {
-        const cell =
-        row.children[8];
-
-        if (!cell) {
-            return null;
-        }
-
-        return parseNumber(
-            cell.innerText
-        );
+        return getNativeCellNumber(row, 8);
     }
 
+    function getLiveOcSettings(row) {
+        return {
+            core: getCore(row),
+            memory: getMemory(row),
+            pl: getPL(row),
+            raw: {
+                core: getNativeCellText(row, 6),
+                memory: getNativeCellText(row, 7),
+                pl: getNativeCellText(row, 8)
+            }
+        };
+    }
 
     // ============================================================
 
@@ -1492,14 +1475,8 @@ const CHECK_INTERVAL = 5000;
             const power =
             getPower(row);
 
-            const core =
-            getCore(row);
-
-            const memory =
-            getMemory(row);
-
-            const pl =
-            getPL(row);
+            const liveOc = getLiveOcSettings(row);
+            const { core, memory, pl } = liveOc;
 
 
             // ----------------------------------------------------
@@ -1517,6 +1494,15 @@ const CHECK_INTERVAL = 5000;
                 memory,
                 pl
             );
+
+            if (core === null || memory === null || pl === null) {
+                console.warn('[HiveOS Additional Information] Could not read all live OC fields', {
+                    gpu,
+                    core: liveOc.raw.core,
+                    memory: liveOc.raw.memory,
+                    pl: liveOc.raw.pl
+                });
+            }
 
 
             // ----------------------------------------------------

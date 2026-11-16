@@ -26,14 +26,8 @@
             const power =
             getPower(row);
 
-            const core =
-            getCore(row);
-
-            const memory =
-            getMemory(row);
-
-            const pl =
-            getPL(row);
+            const liveOc = getLiveOcSettings(row);
+            const { core, memory, pl } = liveOc;
 
 
             // ----------------------------------------------------
@@ -51,6 +45,15 @@
                 memory,
                 pl
             );
+
+            if (core === null || memory === null || pl === null) {
+                console.warn('[HiveOS Additional Information] Could not read all live OC fields', {
+                    gpu,
+                    core: liveOc.raw.core,
+                    memory: liveOc.raw.memory,
+                    pl: liveOc.raw.pl
+                });
+            }
 
 
             // ----------------------------------------------------

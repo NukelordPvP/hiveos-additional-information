@@ -164,16 +164,10 @@
         const changedFields = validFields.filter(field => {
             const oldValue = history[field];
             if (!Number.isFinite(oldValue)) return false;
-            if (oldValue !== incoming[field]) return true;
-
-            // For cells such as PL, HiveOS can change the selected text while
-            // the first numeric token remains the same. Use raw text as a
-            // secondary signal only when both versions are available.
-            const oldRaw = history.raw?.[field];
-            const newRaw = raw?.[field];
-            return typeof oldRaw === 'string' && oldRaw.trim() !== '' &&
-                typeof newRaw === 'string' && newRaw.trim() !== '' &&
-                oldRaw.trim() !== newRaw.trim();
+            // Only a change in the parsed numeric setting counts as an OC
+            // change. Raw cell text can contain ranges/metadata and must not
+            // create a false previous value (e.g. PL remains 110 W).
+            return oldValue !== incoming[field];
         });
 
         if (changedFields.length > 0) {

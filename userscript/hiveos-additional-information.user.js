@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         HiveOS PearlHash TH + TH/W + OC Lifetime Averages
 // @namespace    https://hiveos.farm/
-// @version      35.1
+// @version      34.1
 // @description  Persists current and previous OC settings for every GPU and detects changes after page refresh
 // @match        https://the.hiveos.farm/*
 // @match        https://*.hiveos.farm/*
@@ -13,6 +13,11 @@
 
     const CHECK_INTERVAL = 2000;
 
+    // Versioned rig-specific storage prevents GPU 0 on one worker from
+    // sharing history with GPU 0 on another worker. The HiveOS worker URL
+    // URL origin + pathname identifies the active rig. Query/hash
+    // fragments are intentionally excluded so refreshes and tabs
+    // keep using the same saved history key.
     const OC_STORAGE_PREFIX =
     'nuke-hiveos-oc-history-rig-v2-';
 
@@ -155,11 +160,18 @@
     // ============================================================
     // NATIVE HIVEOS CELLS
     //
+    // IMPORTANT:
+    //
+    // These indexes must remain unchanged.
+    //
     // [2] = TH
     // [5] = Power
     // [6] = Core
     // [7] = MEM
     // [8] = PL
+    //
+    // All custom columns are absolutely positioned so they do
+    // NOT change the native HiveOS child indexes.
     // ============================================================
 
     function getHashrate(row) {
@@ -234,6 +246,26 @@
 
     // ============================================================
     // OC STORAGE
+    //
+    // Each GPU stores:
+    //
+    // Current OC:
+    //   core
+    //   memory
+    //   PL
+    //   startTime
+    //   sampleCount
+    //   sumHashrate
+    //   sumEfficiency
+    //
+    // Previous OC:
+    //   core
+    //   memory
+    //   PL
+    //   startTime
+    //   endTime
+    //   averageHashrate
+    //   averageEfficiency
     // ============================================================
 
     function getOcStorageKey(gpu) {
@@ -355,6 +387,11 @@
 
     // ============================================================
     // UPDATE OC
+    //
+    // This is called BEFORE adding the current sample.
+    //
+    // Therefore, if the OC changes, the current sample belongs
+    // to the NEW OC run.
     // ============================================================
 
     function updateOcHistory(
@@ -372,6 +409,10 @@
         history.memory !== null &&
         history.pl !== null;
 
+
+        // --------------------------------------------------------
+        // FIRST OBSERVATION
+        // --------------------------------------------------------
 
         if (!initialized) {
             history.core =
@@ -404,6 +445,10 @@
         }
 
 
+        // --------------------------------------------------------
+        // CHECK FOR OC CHANGE
+        // --------------------------------------------------------
+
         const changed =
         history.core !== core ||
         history.memory !== memory ||
@@ -411,6 +456,11 @@
 
 
         if (changed) {
+
+            // Always preserve the last observed settings, even if
+            // the OC changed before a mining sample was collected.
+            // This is what allows a refresh to detect and display
+            // the previous settings reliably.
             history.previous = {
                 core: history.core,
                 memory: history.memory,
@@ -418,6 +468,7 @@
                 startTime: history.startTime,
                 endTime: Date.now(),
 
+ // Averages are only available when samples exist.
  averageHashrate: history.sampleCount > 0
  ? history.sumHashrate / history.sampleCount
  : null,
@@ -428,6 +479,7 @@
             };
 
 
+            // Start new OC.
             history.core =
             core;
 
@@ -448,20 +500,21 @@
 
             history.sumEfficiency =
             0;
+
+
+            saveOcHistory(
+                gpu,
+                history
+            );
         }
 
-
-        saveOcHistory(
-            gpu,
-            history
-        );
 
         return history;
     }
 
 
     // ============================================================
-    // ADD CURRENT SAMPLE
+    // ADD CURRENT OC SAMPLE
     // ============================================================
 
     function addCurrentOcSample(
@@ -473,7 +526,7 @@
         loadOcHistory(gpu);
 
 
-        history.sampleCount += 1;
+        history.sampleCount++;
 
         history.sumHashrate +=
         hashrate;
@@ -496,9 +549,7 @@
     // CURRENT OC AVERAGES
     // ============================================================
 
-    function getCurrentOcAverages(
-        history
-    ) {
+    function getCurrentOcAverages(history) {
         if (
             !history ||
             history.sampleCount <= 0
@@ -526,13 +577,11 @@
     // PREVIOUS OC AVERAGES
     // ============================================================
 
-    function getPreviousOcAverages(
-        history
-    ) {
-        if (
-            !history ||
-            !history.previous
-        ) {
+    function getPreviousOcAverages(history) {
+        const previous =
+        history?.previous;
+
+        if (!previous) {
             return {
                 hashrate: null,
                 efficiency: null
@@ -542,123 +591,222 @@
 
         return {
             hashrate:
-            Number.isFinite(
-                history.previous.averageHashrate
-            )
-            ? history.previous.averageHashrate
-            : null,
+            previous.averageHashrate,
 
             efficiency:
-            Number.isFinite(
-                history.previous.averageEfficiency
-            )
-            ? history.previous.averageEfficiency
-            : null
+            previous.averageEfficiency
         };
     }
 
 
     // ============================================================
-    // TH COLUMN
+    // CUSTOM COLUMN HELPERS
+    // ============================================================
+
+    function getOrCreateCell(
+        row,
+        id,
+        className
+    ) {
+        let cell =
+        row.querySelector(
+            `:scope > .${className}`
+        );
+
+
+        if (cell) {
+            return cell;
+        }
+
+
+        cell =
+        document.createElement('div');
+
+        cell.className =
+        className;
+
+        cell.id =
+        id;
+
+        cell.style.position =
+        'absolute';
+
+        cell.style.top =
+        '0';
+
+        cell.style.height =
+        '100%';
+
+        cell.style.display =
+        'flex';
+
+        cell.style.flexDirection =
+        'column';
+
+        cell.style.alignItems =
+        'center';
+
+        cell.style.justifyContent =
+        'center';
+
+        cell.style.whiteSpace =
+        'nowrap';
+
+        cell.style.fontSize =
+        '11px';
+
+        cell.style.lineHeight =
+        '14px';
+
+        cell.style.pointerEvents =
+        'none';
+
+        cell.style.zIndex =
+        '5';
+
+        row.appendChild(cell);
+
+
+        return cell;
+    }
+
+
+    function positionOcColumn(row) {
+        const cell =
+        getOrCreateCell(
+            row,
+            'nuke-oc-column',
+            'nuke-oc-column'
+        );
+
+
+        const plCell =
+        row.children[8];
+
+
+        if (!plCell) {
+            return;
+        }
+
+
+        const rect =
+        plCell.getBoundingClientRect();
+
+        const rowRect =
+        row.getBoundingClientRect();
+
+
+        cell.style.left =
+        `${rect.left - rowRect.left}px`;
+
+        cell.style.width =
+        `${rect.width}px`;
+
+
+        return cell;
+    }
+
+
+    function positionEfficiencyColumn(row) {
+        const cell =
+        getOrCreateCell(
+            row,
+            'nuke-efficiency-column',
+            'nuke-efficiency-column'
+        );
+
+
+        const powerCell =
+        row.children[5];
+
+
+        if (!powerCell) {
+            return;
+        }
+
+
+        const rect =
+        powerCell.getBoundingClientRect();
+
+        const rowRect =
+        row.getBoundingClientRect();
+
+
+        cell.style.left =
+        `${rect.left - rowRect.left}px`;
+
+        cell.style.width =
+        `${rect.width}px`;
+
+
+        return cell;
+    }
+
+
+    // ============================================================
+    // HASHRATE COLUMN
     // ============================================================
 
     function updateHashrateColumn(
         row,
         currentHashrate,
-        currentOcAverage,
+        averageHashrate,
         previousHashrate
     ) {
         const cell =
+        getOrCreateCell(
+            row,
+            'nuke-hashrate-column',
+            'nuke-hashrate-column'
+        );
+
+
+        const nativeCell =
         row.children[2];
 
-        if (!cell) {
+
+        if (!nativeCell) {
             return;
         }
 
 
-        let container =
-        cell.querySelector(
-            ':scope > .nuke-th-container'
-        );
+        const rect =
+        nativeCell.getBoundingClientRect();
+
+        const rowRect =
+        row.getBoundingClientRect();
 
 
-        if (!container) {
-            container =
-            document.createElement(
-                'div'
-            );
+        cell.style.left =
+        `${rect.left - rowRect.left}px`;
 
-            container.className =
-            'nuke-th-container';
-
-                container.style.fontSize =
-                '10px';
-
-                container.style.lineHeight =
-                '11px';
-
-                container.style.whiteSpace =
-                'nowrap';
-
-                container.style.marginTop =
-                '2px';
-
-            container.style.pointerEvents =
-            'none';
-
-            container.style.position =
-            'relative';
-
-            container.style.zIndex =
-            '10';
-
-            cell.appendChild(
-                container
-            );
-        }
+        cell.style.width =
+        `${rect.width}px`;
 
 
-        container.innerHTML = '';
+        const current =
+        currentHashrate !== null
+        ? `${currentHashrate.toFixed(2)}`
+        : '--';
 
 
-        if (
-            currentOcAverage !== null
-        ) {
-            const average =
-            document.createElement(
-                'div'
-            );
-
-            average.textContent =
-            `avg cur: ${currentOcAverage.toFixed(2)} TH`;
-
-            average.style.opacity =
-            '0.8';
-
-            container.appendChild(
-                average
-            );
-        }
+        const average =
+        averageHashrate !== null
+        ? `${averageHashrate.toFixed(2)}`
+        : '--';
 
 
-        if (
-            previousHashrate !== null
-        ) {
-            const previous =
-            document.createElement(
-                'div'
-            );
+        const previous =
+        previousHashrate !== null
+        ? `${previousHashrate.toFixed(2)}`
+        : '--';
 
-            previous.textContent =
-            `prev avg: ${previousHashrate.toFixed(2)} TH`;
 
-            previous.style.opacity =
-            '0.8';
-
-            container.appendChild(
-                previous
-            );
-        }
+        cell.innerHTML = `
+        <div style="color:#fff;">${current}</div>
+        <div style="color:#22c55e;">${average}</div>
+        <div style="color:#f59e0b;">${previous}</div>
+        `;
     }
 
 
@@ -666,179 +814,44 @@
     // EFFICIENCY COLUMN
     // ============================================================
 
-    function getOrCreateEfficiencyColumn(
-        row
+    function updateEfficiencyColumn(
+        row,
+        currentEfficiency,
+        averageEfficiency,
+        previousEfficiency
     ) {
-        let column =
-        row.querySelector(
-            ':scope > .nuke-efficiency-column'
-        );
+        const cell =
+        positionEfficiencyColumn(row);
 
 
-        if (column) {
-            return column;
-        }
-
-
-        column =
-        document.createElement(
-            'div'
-        );
-
-        column.className =
-        'nuke-efficiency-column';
-
-            column.style.position =
-            'absolute';
-
-            column.style.top =
-            '0px';
-
-            column.style.width =
-            '95px';
-
-            column.style.display =
-            'flex';
-
-            column.style.flexDirection =
-            'column';
-
-            column.style.justifyContent =
-            'center';
-
-            column.style.fontSize =
-            '10px';
-
-            column.style.lineHeight =
-            '13px';
-
-            column.style.whiteSpace =
-            'nowrap';
-
-            column.style.pointerEvents =
-            'none';
-
-            column.style.zIndex =
-            '20';
-
-            row.style.position =
-            'relative';
-
-            row.appendChild(
-                column
-            );
-
-
-            return column;
-    }
-
-
-    function positionEfficiencyColumn(
-        row
-    ) {
-        const hashrateCell =
-        row.children[2];
-
-        if (!hashrateCell) {
+        if (!cell) {
             return;
         }
 
 
-        const column =
-        getOrCreateEfficiencyColumn(
-            row
-        );
-
-
-        const width =
-        95;
-
-        const gap =
-        5;
-
-
-        column.style.left =
-        `${Math.max(
-            0,
-            hashrateCell.offsetLeft -
-            width -
-            gap
-        )}px`;
-    }
-
-
-    function updateEfficiencyColumn(
-        row,
-        currentEfficiency,
-        currentOcAverage,
-        previousEfficiency
-    ) {
-        const column =
-        getOrCreateEfficiencyColumn(
-            row
-        );
-
-
-        positionEfficiencyColumn(
-            row
-        );
-
-
-        column.innerHTML =
-        '';
-
-
         const current =
-        document.createElement(
-            'div'
-        );
-
-        current.textContent =
-        `cur: ${currentEfficiency.toFixed(3)} TH/W`;
-
-        column.appendChild(
-            current
-        );
+        currentEfficiency !== null
+        ? currentEfficiency.toFixed(3)
+        : '--';
 
 
-        if (
-            currentOcAverage !== null
-        ) {
-            const average =
-            document.createElement(
-                'div'
-            );
-
-            average.textContent =
-            `avg cur: ${currentOcAverage.toFixed(3)} TH/W`;
-
-            average.style.opacity =
-            '0.8';
-
-        column.appendChild(
-            average
-        );
-        }
+        const average =
+        averageEfficiency !== null
+        ? averageEfficiency.toFixed(3)
+        : '--';
 
 
-        if (
-            previousEfficiency !== null
-        ) {
-            const previous =
-            document.createElement(
-                'div'
-            );
+        const previous =
+        previousEfficiency !== null
+        ? previousEfficiency.toFixed(3)
+        : '--';
 
-            previous.textContent =
-            `prev avg: ${previousEfficiency.toFixed(3)} TH/W`;
 
-            previous.style.opacity =
-            '0.8';
-
-        column.appendChild(
-            previous
-        );
-        }
+        cell.innerHTML = `
+        <div style="color:#fff;">${current}</div>
+        <div style="color:#22c55e;">${average}</div>
+        <div style="color:#f59e0b;">${previous}</div>
+        `;
     }
 
 
@@ -846,318 +859,205 @@
     // OC TIMER COLUMN
     // ============================================================
 
-    function getOrCreateOcColumn(
-        row
-    ) {
-        let column =
-        row.querySelector(
-            ':scope > .nuke-oc-column'
-        );
-
-
-        if (column) {
-            return column;
-        }
-
-
-        column =
-        document.createElement(
-            'div'
-        );
-
-        column.className =
-        'nuke-oc-column';
-
-            column.style.position =
-            'absolute';
-
-            column.style.top =
-            '0px';
-
-        column.style.width =
-        '58px';
-
-        column.style.display =
-        'flex';
-
-        column.style.flexDirection =
-        'column';
-
-        column.style.justifyContent =
-        'center';
-
-        column.style.fontSize =
-        '10px';
-
-        column.style.lineHeight =
-        '13px';
-
-        column.style.whiteSpace =
-        'nowrap';
-
-        column.style.pointerEvents =
-        'none';
-
-        column.style.zIndex =
-        '30';
-
-        row.style.position =
-        'relative';
-
-        row.appendChild(
-            column
-        );
-
-
-        return column;
-    }
-
-
-    function positionOcColumn(
-        row
-    ) {
-        const hashrateCell =
-        row.children[2];
-
-        if (!hashrateCell) {
-            return;
-        }
-
-
-        const column =
-        getOrCreateOcColumn(
-            row
-        );
-
-
-        const efficiencyWidth =
-        95;
-
-        const efficiencyGap =
-        5;
-
-        const ocWidth =
-        58;
-
-        const ocGap =
-        5;
-
-
-        const efficiencyLeft =
-        hashrateCell.offsetLeft -
-        efficiencyWidth -
-        efficiencyGap;
-
-
-        const ocLeft =
-        efficiencyLeft -
-        ocWidth -
-        ocGap;
-
-
-        column.style.left =
-        `${Math.max(
-            0,
-            ocLeft
-        )}px`;
-    }
-
-
     function updateOcColumn(
         row,
         history
     ) {
-        const column =
-        getOrCreateOcColumn(
-            row
-        );
+        const cell =
+        positionOcColumn(row);
 
 
-        positionOcColumn(
-            row
-        );
-
-
-        column.innerHTML =
-        '';
-
-
-        const elapsed =
-        Math.floor(
-            (
-                Date.now() -
-                history.startTime
-            ) / 1000
-        );
-
-
-        const timer =
-        document.createElement(
-            'div'
-        );
-
-        timer.textContent =
-        `OC: ${formatDuration(elapsed)}`;
-
-
-        column.appendChild(
-            timer
-        );
-    }
-
-
-    // ============================================================
-    // CORE / MEM / PL CURRENT + PREVIOUS
-    // ============================================================
-
-    function updateOcValueDisplay(
-        cell,
-        currentValue,
-        previousValue
-    ) {
         if (!cell) {
             return;
         }
 
 
-        cell.style.position =
-        'relative';
+        const elapsed =
+        (Date.now() - history.startTime) / 1000;
 
 
-            let container =
-            cell.querySelector(
-                ':scope > .nuke-oc-values'
-            );
-
-
-            if (!container) {
-                container =
-                document.createElement(
-                    'div'
-                );
-
-                container.className =
-                'nuke-oc-values';
-
-                    container.style.position =
-                    'absolute';
-
-                    container.style.left =
-                    '0px';
-
-        container.style.right =
-        '0px';
-
-        container.style.top =
-        '25px';
-
-        container.style.fontSize =
-        '9px';
-
-        container.style.lineHeight =
-        '10px';
-
-        container.style.whiteSpace =
-        'nowrap';
-
-        container.style.textAlign =
-        'center';
-
-        container.style.pointerEvents =
-        'none';
-
-        container.style.zIndex =
-        '50';
-
-        cell.appendChild(
-            container
-        );
-            }
-
-
-            container.innerHTML =
-            '';
-
-
-        if (
-            currentValue !== null &&
-            currentValue !== undefined
-        ) {
-            const current =
-            document.createElement(
-                'div'
-            );
-
-            current.textContent =
-            `cur: ${currentValue}`;
-
-            container.appendChild(
-                current
-            );
-        }
-
-
-        if (
-            previousValue !== null &&
-            previousValue !== undefined
-        ) {
-            const previous =
-            document.createElement(
-                'div'
-            );
-
-            previous.textContent =
-            `prev: ${previousValue}`;
-
-            previous.style.opacity =
-            '0.65';
-
-            container.appendChild(
-                previous
-            );
-        }
+        cell.innerHTML = `
+        <div style="color:#fff;">${formatDuration(elapsed)}</div>
+        `;
     }
 
+
+    // ============================================================
+    // CURRENT / PREVIOUS OC VALUES
+    // ============================================================
 
     function updateCurrentPreviousValues(
         row,
         history
     ) {
-        if (!history) {
-            return;
+        const core =
+        history.core !== null
+        ? history.core
+        : '--';
+
+        const memory =
+        history.memory !== null
+        ? history.memory
+        : '--';
+
+        const pl =
+        history.pl !== null
+        ? history.pl
+        : '--';
+
+
+        const previous =
+        history.previous;
+
+
+        const previousCore =
+        previous?.core ?? '--';
+
+        const previousMemory =
+        previous?.memory ?? '--';
+
+        const previousPL =
+        previous?.pl ?? '--';
+
+
+        const coreCell =
+        row.children[6];
+
+        const memoryCell =
+        row.children[7];
+
+        const plCell =
+        row.children[8];
+
+
+        if (
+            coreCell &&
+            !coreCell.querySelector('.nuke-current-previous')
+        ) {
+            const wrapper =
+            document.createElement('div');
+
+            wrapper.className =
+            'nuke-current-previous';
+
+        wrapper.style.display =
+        'flex';
+
+        wrapper.style.flexDirection =
+        'column';
+
+        wrapper.style.alignItems =
+        'center';
+
+        wrapper.style.fontSize =
+        '10px';
+
+        wrapper.style.lineHeight =
+        '12px';
+
+        coreCell.appendChild(wrapper);
         }
 
 
-        updateOcValueDisplay(
-            row.children[6],
-            history.core,
-            history.previous
-            ? history.previous.core
-            : null
-        );
+        if (
+            memoryCell &&
+            !memoryCell.querySelector('.nuke-current-previous')
+        ) {
+            const wrapper =
+            document.createElement('div');
+
+            wrapper.className =
+            'nuke-current-previous';
+
+        wrapper.style.display =
+        'flex';
+
+        wrapper.style.flexDirection =
+        'column';
+
+        wrapper.style.alignItems =
+        'center';
+
+        wrapper.style.fontSize =
+        '10px';
+
+        wrapper.style.lineHeight =
+        '12px';
+
+        memoryCell.appendChild(wrapper);
+        }
 
 
-        updateOcValueDisplay(
-            row.children[7],
-            history.memory,
-            history.previous
-            ? history.previous.memory
-            : null
-        );
+        if (
+            plCell &&
+            !plCell.querySelector('.nuke-current-previous')
+        ) {
+            const wrapper =
+            document.createElement('div');
+
+            wrapper.className =
+            'nuke-current-previous';
+
+        wrapper.style.display =
+        'flex';
+
+        wrapper.style.flexDirection =
+        'column';
+
+        wrapper.style.alignItems =
+        'center';
+
+        wrapper.style.fontSize =
+        '10px';
+
+        wrapper.style.lineHeight =
+        '12px';
+
+        plCell.appendChild(wrapper);
+        }
 
 
-        updateOcValueDisplay(
-            row.children[8],
-            history.pl,
-            history.previous
-            ? history.previous.pl
-            : null
-        );
+        const coreWrapper =
+        coreCell?.querySelector('.nuke-current-previous');
+
+        const memoryWrapper =
+        memoryCell?.querySelector('.nuke-current-previous');
+
+        const plWrapper =
+        plCell?.querySelector('.nuke-current-previous');
+
+
+        if (coreWrapper) {
+            coreWrapper.innerHTML = `
+            <div style="color:#22c55e;">${core}</div>
+            <div style="color:#f59e0b;">${previousCore}</div>
+            `;
+        }
+
+
+        if (memoryWrapper) {
+            memoryWrapper.innerHTML = `
+            <div style="color:#22c55e;">${memory}</div>
+            <div style="color:#f59e0b;">${previousMemory}</div>
+            `;
+        }
+
+
+        if (plWrapper) {
+            plWrapper.innerHTML = `
+            <div style="color:#22c55e;">${pl}</div>
+            <div style="color:#f59e0b;">${previousPL}</div>
+            `;
+        }
     }
 
 
     // ============================================================
-    // GPU SETTINGS STATE
+    // GPU SETTINGS STATE BADGE
+    //
+    // MATCHING = live OC matches saved previous OC
+    // CHANGED  = live OC differs from saved previous OC
+    // NO PREVIOUS = no previous OC exists
     // ============================================================
 
     function updateGpuSettingsState(
@@ -1167,125 +1067,118 @@
         memory,
         pl
     ) {
-        const infoCell =
+        const hardwareCell =
         row.children[0];
 
-        if (!infoCell) {
+        if (!hardwareCell) {
             return;
         }
 
 
         let state =
-        infoCell.querySelector(
-            ':scope > .nuke-gpu-settings-state'
+        hardwareCell.querySelector(
+            '.nuke-gpu-settings-state'
         );
 
 
         if (!state) {
             state =
-            document.createElement(
-                'span'
-            );
+            document.createElement('span');
 
             state.className =
             'nuke-gpu-settings-state';
 
-                state.style.display =
-                'inline-block';
+            state.style.display =
+            'inline-block';
 
-                state.style.marginLeft =
-                '12px';
+        state.style.marginLeft =
+        '6px';
 
-            state.style.padding =
-            '2px 7px';
+        state.style.padding =
+        '2px 5px';
 
-            state.style.borderRadius =
-            '4px';
+        state.style.borderRadius =
+        '4px';
 
-            state.style.fontSize =
-            '10px';
+        state.style.fontSize =
+        '9px';
 
-            state.style.fontWeight =
-            '600';
+        state.style.fontWeight =
+        'bold';
 
-            state.style.lineHeight =
-            '14px';
+        state.style.lineHeight =
+        '12px';
 
-            state.style.whiteSpace =
-            'nowrap';
+        state.style.verticalAlign =
+        'middle';
 
-            state.style.verticalAlign =
-            'middle';
-
-            state.style.pointerEvents =
-            'none';
-
-            infoCell.appendChild(
-                state
-            );
+        hardwareCell.appendChild(state);
         }
 
 
-        const hasSavedCurrent =
-        !!(
-            history &&
-            history.core !== null &&
-            history.memory !== null &&
-            history.pl !== null
-        );
+        const previous =
+        history.previous;
 
 
-        const matchesSavedCurrent =
-        hasSavedCurrent &&
-        Number(core) === Number(history.core) &&
-        Number(memory) === Number(history.memory) &&
-        Number(pl) === Number(history.pl);
-
-
-        if (!hasSavedCurrent) {
+        if (!previous) {
             state.textContent =
             'NO PREVIOUS';
 
-            state.style.color =
-            '#9ca3af';
+        state.style.color =
+        '#9ca3af';
 
-            state.style.background =
-            'rgba(156,163,175,0.14)';
+        state.style.background =
+        'rgba(156,163,175,0.14)';
 
-            state.title =
-            'No saved Core, MEM and PL settings exist yet';
+        state.title =
+        'No previous OC settings have been recorded';
 
-        } else if (matchesSavedCurrent) {
+        return;
+        }
+
+
+        const matchesPrevious =
+        previous.core === core &&
+        previous.memory === memory &&
+        previous.pl === pl;
+
+
+        if (matchesPrevious) {
             state.textContent =
             'MATCHING';
 
-            state.style.color =
-            '#22c55e';
+        state.style.color =
+        '#22c55e';
 
-            state.style.background =
-            'rgba(34,197,94,0.14)';
+        state.style.background =
+        'rgba(34,197,94,0.14)';
 
-            state.title =
-            'Live Core, MEM and PL match the saved current settings';
+        state.title =
+        'Current live OC matches the saved previous OC settings';
 
         } else {
             state.textContent =
             'CHANGED';
 
-            state.style.color =
-            '#f59e0b';
+        state.style.color =
+        '#f59e0b';
 
-            state.style.background =
-            'rgba(245,158,11,0.14)';
+        state.style.background =
+        'rgba(245,158,11,0.14)';
 
-            state.title =
-            'Live Core, MEM or PL differs from the saved current settings';
+        state.title =
+        'At least one current OC setting differs from the saved previous settings';
         }
     }
 
 
     // ============================================================
     // GLOBAL REFRESH COUNTDOWN
+    //
+    // ONE timer for the whole table.
+    //
+    // It is positioned above the TH column.
+    // It is NOT part of each GPU row.
     // ============================================================
 
     function getOrCreateGlobalRefresh() {
@@ -1314,27 +1207,27 @@
             element.style.fontSize =
             '9px';
 
-            element.style.lineHeight =
-            '11px';
+        element.style.lineHeight =
+        '11px';
 
-            element.style.whiteSpace =
-            'nowrap';
+        element.style.whiteSpace =
+        'nowrap';
 
-            element.style.opacity =
-            '0.65';
+        element.style.opacity =
+        '0.65';
 
-            element.style.pointerEvents =
-            'none';
+        element.style.pointerEvents =
+        'none';
 
-            element.style.zIndex =
-            '999999';
+        element.style.zIndex =
+        '999999';
 
-            document.body.appendChild(
-                element
-            );
+        document.body.appendChild(
+            element
+        );
 
 
-            return element;
+        return element;
     }
 
 
@@ -1432,6 +1325,8 @@
             getPL(row);
 
 
+            // Detect and display OC state even while HiveOS is still
+            // loading hashrate/power after a page refresh.
             if (
                 core === null ||
                 memory === null ||
@@ -1440,51 +1335,39 @@
                 continue;
             }
 
-
-            const savedHistory =
-            loadOcHistory(gpu);
-
-            updateGpuSettingsState(
-                row,
-                savedHistory,
-                core,
-                memory,
-                pl
-            );
-
-
-            const ocHistory =
-            updateOcHistory(
-                gpu,
-                core,
-                memory,
-                pl
-            );
-
+            const ocHistory = updateOcHistory(gpu, core, memory, pl);
+            updateGpuSettingsState(row, ocHistory, core, memory, pl);
 
             if (
                 hashrate === null ||
                 power === null ||
                 power <= 0
             ) {
-                updateCurrentPreviousValues(
-                    row,
-                    ocHistory
-                );
-
-                updateOcColumn(
-                    row,
-                    ocHistory
-                );
-
+                updateCurrentPreviousValues(row, ocHistory);
+                updateOcColumn(row, ocHistory);
                 continue;
             }
 
+
+            // ----------------------------------------------------
+            // INSTANTANEOUS EFFICIENCY
+            // ----------------------------------------------------
 
             const efficiency =
             hashrate /
             power;
 
+
+            // ----------------------------------------------------
+            // UPDATE OC FIRST
+            //
+            // If OC changed, this creates the new OC run before
+            // this sample gets added.
+            // ----------------------------------------------------
+
+            // ----------------------------------------------------
+            // ADD CURRENT SAMPLE TO CURRENT OC
+            // ----------------------------------------------------
 
             const updatedHistory =
             addCurrentOcSample(
@@ -1494,17 +1377,29 @@
             );
 
 
+            // ----------------------------------------------------
+            // CURRENT OC AVERAGES
+            // ----------------------------------------------------
+
             const currentOc =
             getCurrentOcAverages(
                 updatedHistory
             );
 
 
+            // ----------------------------------------------------
+            // PREVIOUS OC AVERAGES
+            // ----------------------------------------------------
+
             const previousOc =
             getPreviousOcAverages(
                 updatedHistory
             );
 
+
+            // ----------------------------------------------------
+            // TH COLUMN
+            // ----------------------------------------------------
 
             updateHashrateColumn(
                 row,
@@ -1514,6 +1409,10 @@
             );
 
 
+            // ----------------------------------------------------
+            // SEPARATE TH/W COLUMN
+            // ----------------------------------------------------
+
             updateEfficiencyColumn(
                 row,
                 efficiency,
@@ -1522,11 +1421,19 @@
             );
 
 
+            // ----------------------------------------------------
+            // OC TIMER
+            // ----------------------------------------------------
+
             updateOcColumn(
                 row,
                 updatedHistory
             );
 
+
+            // ----------------------------------------------------
+            // CORE / MEM / PL
+            // ----------------------------------------------------
 
             updateCurrentPreviousValues(
                 row,
@@ -1535,12 +1442,18 @@
         }
 
 
+        // --------------------------------------------------------
+        // GLOBAL REFRESH TIMER
+        // --------------------------------------------------------
+
         updateGlobalRefreshCountdown();
     }
 
 
     // ============================================================
     // UPDATE PER-GPU TIMERS
+    //
+    // Runs every second without adding another mining sample.
     // ============================================================
 
     function updateTimers() {
@@ -1571,38 +1484,23 @@
                 continue;
             }
 
-
-            const liveCore =
-            getCore(row);
-
-            const liveMemory =
-            getMemory(row);
-
-            const livePL =
-            getPL(row);
+            updateGpuSettingsState(
+                row,
+                history,
+                getCore(row),
+                                   getMemory(row),
+                                   getPL(row)
+            );
 
 
-            if (
-                liveCore !== null &&
-                liveMemory !== null &&
-                livePL !== null
-            ) {
-                updateGpuSettingsState(
-                    row,
-                    history,
-                    liveCore,
-                    liveMemory,
-                    livePL
-                );
-            }
-
-
+            // OC timer
             updateOcColumn(
                 row,
                 history
             );
 
 
+            // Current/previous OC values
             updateCurrentPreviousValues(
                 row,
                 history
@@ -1616,6 +1514,13 @@
 
     // ============================================================
     // INITIAL START
+    // ============================================================
+    //
+    // On every page load/refresh, scan the rendered GPU rows and
+    // compare their live Core/MEM/PL values against each GPU's
+    // saved current settings in localStorage. If any differ,
+    // the saved settings become "previous" and the live values
+    // become "current". Each rig has its own storage namespace.
     // ============================================================
 
     setTimeout(() => {
@@ -1650,7 +1555,7 @@
 
 
     // ============================================================
-    // TWO-SECOND MINING SAMPLE
+    // FIVE-SECOND MINING SAMPLE
     // ============================================================
 
     setInterval(() => {

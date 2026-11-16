@@ -1,0 +1,13 @@
+{
+  "name": "hiveos-additional-information-userscript",
+  "version": "35.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "check": "npm run build && node --check dist/HiveOS_Additional_Information.user.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

@@ -1,17 +1,26 @@
 // ==UserScript==
-// @name         HiveOS PearlHash TH + TH/W + OC Lifetime Averages
+// @name         HiveOS Additional Information
 // @namespace    https://hiveos.farm/
-// @version      34.0
-// @description  Persists current and previous OC settings for every GPU and detects changes after page refresh
+// @version      35.0.0
+// @description  GPU metrics, overclock history, timers and additional HiveOS interface information
 // @match        https://the.hiveos.farm/*
 // @match        https://*.hiveos.farm/*
 // @grant        none
 // ==/UserScript==
 
 (function () {
-    'use strict';
+'use strict';
 
-    const CHECK_INTERVAL = 5000;
+/* ===== src/config.js ===== */
+// Central settings. Edit these values instead of searching through the app.
+// The legacy implementation currently reads CHECK_INTERVAL from this declaration.
+const CHECK_INTERVAL = 5000;
+
+
+/* ===== src/00-config-and-helpers.js ===== */
+// Configuration and common helpers
+// This file is concatenated into the userscript by scripts/build.mjs.
+
 
     // Versioned rig-specific storage prevents GPU 0 on one worker from
     // sharing history with GPU 0 on another worker. The HiveOS worker URL
@@ -115,6 +124,12 @@
 
 
     // ============================================================
+
+
+/* ===== src/10-hiveos-dom.js ===== */
+// HiveOS GPU discovery and value parsing
+// This file is concatenated into the userscript by scripts/build.mjs.
+
     // GPU ROW DETECTION
     // ============================================================
 
@@ -252,6 +267,12 @@
 
 
     // ============================================================
+
+
+/* ===== src/20-oc-history.js ===== */
+// Per-rig, per-GPU persistent OC history and averages
+// This file is concatenated into the userscript by scripts/build.mjs.
+
     // OC STORAGE
     // ============================================================
 
@@ -609,6 +630,12 @@
 
 
     // ============================================================
+
+
+/* ===== src/ui/30-metrics.js ===== */
+// TH and TH/W display
+// This file is concatenated into the userscript by scripts/build.mjs.
+
     // TH COLUMN
     // ============================================================
 
@@ -892,6 +919,12 @@
 
 
     // ============================================================
+
+
+/* ===== src/ui/40-overlays.js ===== */
+// OC timer, OC values, GPU state and countdown UI
+// This file is concatenated into the userscript by scripts/build.mjs.
+
     // OC TIMER COLUMN
     // ============================================================
 
@@ -1218,8 +1251,17 @@
     function getOrCreateGpuStateElement(
         row
     ) {
+        // Place the badge in the GPU hardware-information cell.
+        // Appending it to the whole row with position:absolute/right
+        // overlaps HiveOS's native fan, controls and action area.
+        const hardwareCell = row.children[0];
+
+        if (!hardwareCell) {
+            return null;
+        }
+
         let state =
-        row.querySelector(
+        hardwareCell.querySelector(
             ':scope > .nuke-gpu-state'
         );
 
@@ -1227,59 +1269,22 @@
             return state;
         }
 
+        state = document.createElement('span');
+        state.className = 'nuke-gpu-state';
+        state.style.display = 'inline-block';
+        state.style.position = 'static';
+        state.style.marginLeft = '8px';
+        state.style.verticalAlign = 'middle';
+        state.style.fontSize = '9px';
+        state.style.fontWeight = '700';
+        state.style.lineHeight = '14px';
+        state.style.padding = '1px 5px';
+        state.style.borderRadius = '4px';
+        state.style.whiteSpace = 'nowrap';
+        state.style.pointerEvents = 'none';
+        state.style.zIndex = '1';
 
-        state =
-        document.createElement(
-            'div'
-        );
-
-        state.className =
-        'nuke-gpu-state';
-
-            state.style.position =
-            'absolute';
-
-            state.style.right =
-            '12px';
-
-            state.style.top =
-            '50%';
-
-        state.style.transform =
-        'translateY(-50%)';
-
-            state.style.fontSize =
-            '10px';
-
-            state.style.fontWeight =
-            '700';
-
-        state.style.lineHeight =
-        '16px';
-
-        state.style.padding =
-        '2px 8px';
-
-        state.style.borderRadius =
-        '4px';
-
-        state.style.whiteSpace =
-        'nowrap';
-
-        state.style.pointerEvents =
-        'none';
-
-        state.style.zIndex =
-        '100';
-
-        row.style.position =
-        'relative';
-
-        row.appendChild(
-            state
-        );
-
-
+        hardwareCell.appendChild(state);
         return state;
     }
 
@@ -1293,6 +1298,9 @@
             row
         );
 
+        if (!state) {
+            return;
+        }
 
         if (
             !history ||
@@ -1453,6 +1461,12 @@
 
 
     // ============================================================
+
+
+/* ===== src/50-app.js ===== */
+// GPU scan loop, timers and event handlers
+// This file is concatenated into the userscript by scripts/build.mjs.
+
     // MAIN GPU SCAN
     // ============================================================
 

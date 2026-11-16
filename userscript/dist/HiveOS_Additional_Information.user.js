@@ -448,19 +448,27 @@ const CHECK_INTERVAL = 5000;
             // Save only the fields that actually changed. Unchanged settings
             // must not be presented as previous values merely because another
             // OC field changed.
+            // Merge into the saved previous values instead of replacing the
+            // whole object. A change to MEM must not erase the last saved Core
+            // value (and vice versa). Each field retains its most recently
+            // superseded value until that same field changes again.
+            const savedPrevious = history.previous || {};
             history.previous = {
+                ...savedPrevious,
                 core: changedFields.includes('core') && Number.isFinite(history.core)
-                    ? history.core : null,
+                    ? history.core : (savedPrevious.core ?? null),
                 memory: changedFields.includes('memory') && Number.isFinite(history.memory)
-                    ? history.memory : null,
+                    ? history.memory : (savedPrevious.memory ?? null),
                 pl: changedFields.includes('pl') && Number.isFinite(history.pl)
-                    ? history.pl : null,
-                changedFields: [...changedFields],
-                raw: history.raw || null,
+                    ? history.pl : (savedPrevious.pl ?? null),
+                changedFields: [...new Set([
+                    ...(savedPrevious.changedFields || []),
+                    ...changedFields
+                ])],
+                raw: { ...(savedPrevious.raw || {}), ...(history.raw || {}) },
                 startTime: history.startTime,
                 endTime: Date.now(),
-                // How long the outgoing OC configuration was active before
-                // this change was detected.
+                // Duration/averages describe the most recent detected change.
                 durationSeconds: Math.max(0, Math.floor((Date.now() - history.startTime) / 1000)),
                 averageHashrate: history.sampleCount > 0
                     ? history.sumHashrate / history.sampleCount : null,
